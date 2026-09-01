@@ -33,6 +33,23 @@ public sealed class VehicleTests
     }
 
     [Fact]
+    public void Constructor_ShouldUseExternalId_WhenProvided()
+    {
+        var id = Guid.NewGuid();
+
+        var vehicle = new Vehicle(id, "Toyota", "Corolla", 2022, "Prata", 120000m);
+
+        Assert.Equal(id, vehicle.Id);
+    }
+
+    [Fact]
+    public void Constructor_ShouldRejectEmptyExternalId()
+    {
+        var act = () => new Vehicle(Guid.Empty, "Toyota", "Corolla", 2022, "Prata", 120000m);
+        Assert.Throws<DomainException>(act);
+    }
+
+    [Fact]
     public void Constructor_ShouldTrimTextFields_WhenDataHasWhiteSpaces()
     {
         // Act

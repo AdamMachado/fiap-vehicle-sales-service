@@ -23,9 +23,18 @@ public sealed class Vehicle : Entity
     }
 
     public Vehicle(string brand, string model, int year, string color, decimal price)
+        : this(Guid.NewGuid(), brand, model, year, color, price)
     {
+    }
+
+    public Vehicle(Guid id, string brand, string model, int year, string color, decimal price)
+    {
+        if (id == Guid.Empty)
+            throw new DomainException("O identificador do veículo é obrigatório.");
+
         Validate(brand, model, year, color, price);
 
+        Id = id;
         Brand = brand.Trim();
         Model = model.Trim();
         Year = year;

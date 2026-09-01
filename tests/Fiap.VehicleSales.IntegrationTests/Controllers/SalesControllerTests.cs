@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using Fiap.VehicleSales.Application.DTOs;
 using Fiap.VehicleSales.IntegrationTests.Factory;
@@ -9,47 +9,18 @@ namespace Fiap.VehicleSales.IntegrationTests.Controllers;
 public sealed class SalesControllerTests
 {
     [Fact]
-    public async Task Purchase_ShouldReturnOk_WhenUserIsBuyerAndVehicleIsAvailable()
+    public async Task Purchase_ShouldReturnPendingSale_WhenBuyerAndVehicleAreValid()
     {
-        // Arrange
         await using var factory = new CustomWebApplicationFactory();
         var client = factory.CreateClient();
+        var vehicle = await SyncVehicleAsync(client, "Toyota", "Corolla", 120000m);
+        Authenticate(client, "buyer-test-001", "buyer");
 
-        client.DefaultRequestHeaders.Add("X-Test-User", "admin-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
+        var response = await client.PostAsJsonAsync("/api/sales", Purchase(vehicle.Id));
+        var sale = await response.Content.ReadFromJsonAsync<SaleResponse>();
 
-        var createVehicleResponse = await client.PostAsJsonAsync("/api/vehicles", new CreateVehicleRequest
-        {
-            Brand = "Toyota",
-            Model = "Corolla",
-            Year = 2022,
-            Color = "Prata",
-            Price = 120000m
-        });
-
-        var vehicle = await createVehicleResponse.Content.ReadFromJsonAsync<VehicleResponse>();
-
-        client.DefaultRequestHeaders.Clear();
-        client.DefaultRequestHeaders.Add("X-Test-User", "buyer-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "buyer");
-
-        var purchaseRequest = new PurchaseVehicleRequest
-        {
-            VehicleId = vehicle!.Id,
-            BuyerCpf = "52998224725"
-        };
-
-        // Act
-        var purchaseResponse = await client.PostAsJsonAsync("/api/sales", purchaseRequest);
-
-        // Assert
-        purchaseResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var sale = await purchaseResponse.Content.ReadFromJsonAsync<SaleResponse>();
-
-        sale.Should().NotBeNull();
-        sale!.Id.Should().NotBeEmpty();
-        sale.VehicleId.Should().Be(vehicle.Id);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        sale!.VehicleId.Should().Be(vehicle.Id);
         sale.BuyerId.Should().Be("buyer-test-001");
         sale.BuyerCpf.Should().Be("52998224725");
         sale.PaymentCode.Should().NotBeNullOrWhiteSpace();
@@ -60,109 +31,44 @@ public sealed class SalesControllerTests
     [Fact]
     public async Task Purchase_ShouldReturnUnauthorized_WhenUserIsNotAuthenticated()
     {
-        // Arrange
         await using var factory = new CustomWebApplicationFactory();
-        var client = factory.CreateClient();
-
-        var request = new PurchaseVehicleRequest
-        {
-            VehicleId = Guid.NewGuid(),
-            BuyerCpf = "52998224725"
-        };
-
-        // Act
-        var response = await client.PostAsJsonAsync("/api/sales", request);
-
-        // Assert
+        var response = await factory.CreateClient().PostAsJsonAsync("/api/sales", Purchase(Guid.NewGuid()));
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task Purchase_ShouldReturnForbidden_WhenUserIsAdmin()
     {
-        // Arrange
         await using var factory = new CustomWebApplicationFactory();
         var client = factory.CreateClient();
+        Authenticate(client, "admin-test-001", "admin");
 
-        client.DefaultRequestHeaders.Add("X-Test-User", "admin-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
-
-        var request = new PurchaseVehicleRequest
-        {
-            VehicleId = Guid.NewGuid(),
-            BuyerCpf = "52998224725"
-        };
-
-        // Act
-        var response = await client.PostAsJsonAsync("/api/sales", request);
-
-        // Assert
+        var response = await client.PostAsJsonAsync("/api/sales", Purchase(Guid.NewGuid()));
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
-    public async Task Purchase_ShouldMoveVehicleFromAvailableToSold()
+    public async Task ProcessPayment_ShouldMoveVehicleFromAvailableToSold()
     {
-        // Arrange
         await using var factory = new CustomWebApplicationFactory();
         var client = factory.CreateClient();
-
-        client.DefaultRequestHeaders.Add("X-Test-User", "admin-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
-
-        var createVehicleResponse = await client.PostAsJsonAsync("/api/vehicles", new CreateVehicleRequest
-        {
-            Brand = "Honda",
-            Model = "Civic",
-            Year = 2021,
-            Color = "Preto",
-            Price = 115000m
-        });
-
-        var vehicle = await createVehicleResponse.Content.ReadFromJsonAsync<VehicleResponse>();
-
-        client.DefaultRequestHeaders.Clear();
-        client.DefaultRequestHeaders.Add("X-Test-User", "buyer-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "buyer");
-
-        var purchaseResponse = await client.PostAsJsonAsync("/api/sales", new PurchaseVehicleRequest
-        {
-            VehicleId = vehicle!.Id,
-            BuyerCpf = "52998224725"
-        });
-
+        var vehicle = await SyncVehicleAsync(client, "Honda", "Civic", 115000m);
+        Authenticate(client, "buyer-test-001", "buyer");
+        var purchaseResponse = await client.PostAsJsonAsync("/api/sales", Purchase(vehicle.Id));
         var sale = await purchaseResponse.Content.ReadFromJsonAsync<SaleResponse>();
 
-        client.DefaultRequestHeaders.Clear();
-        client.DefaultRequestHeaders.Add("X-Test-User", "main-service");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
-
+        Authenticate(client, "main-software", "vehicle-sales-service");
         var paymentResponse = await client.PutAsJsonAsync(
             $"/api/sales/payments/{sale!.PaymentCode}",
             new ProcessPaymentRequest { Status = "Completed" });
-
-        paymentResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
         client.DefaultRequestHeaders.Clear();
 
-        // Act
-        var availableResponse = await client.GetAsync("/api/vehicles/available");
-        var soldResponse = await client.GetAsync("/api/vehicles/sold");
+        var available = await client.GetFromJsonAsync<List<VehicleResponse>>("/api/vehicles/available");
+        var sold = await client.GetFromJsonAsync<List<VehicleResponse>>("/api/vehicles/sold");
 
-        // Assert
-        availableResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        soldResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var availableVehicles = await availableResponse.Content.ReadFromJsonAsync<List<VehicleResponse>>();
-        var soldVehicles = await soldResponse.Content.ReadFromJsonAsync<List<VehicleResponse>>();
-
-        availableVehicles.Should().NotBeNull();
-        soldVehicles.Should().NotBeNull();
-
-        availableVehicles!.Should().BeEmpty();
-        soldVehicles!.Should().HaveCount(1);
-        soldVehicles[0].Id.Should().Be(vehicle.Id);
-        soldVehicles[0].Status.Should().Be("Sold");
+        paymentResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        available.Should().BeEmpty();
+        sold.Should().ContainSingle(item => item.Id == vehicle.Id && item.Status == "Sold");
     }
 
     [Fact]
@@ -170,34 +76,64 @@ public sealed class SalesControllerTests
     {
         await using var factory = new CustomWebApplicationFactory();
         var client = factory.CreateClient();
-
-        client.DefaultRequestHeaders.Add("X-Test-User", "admin-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
-        var createResponse = await client.PostAsJsonAsync("/api/vehicles", new CreateVehicleRequest
-        {
-            Brand = "Ford", Model = "Ka", Year = 2020, Color = "Branco", Price = 50000m
-        });
-        var vehicle = await createResponse.Content.ReadFromJsonAsync<VehicleResponse>();
-
-        client.DefaultRequestHeaders.Clear();
-        client.DefaultRequestHeaders.Add("X-Test-User", "buyer-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "buyer");
-        var purchaseResponse = await client.PostAsJsonAsync("/api/sales", new PurchaseVehicleRequest
-        {
-            VehicleId = vehicle!.Id,
-            BuyerCpf = "52998224725"
-        });
+        var vehicle = await SyncVehicleAsync(client, "Ford", "Ka", 50000m);
+        Authenticate(client, "buyer-test-001", "buyer");
+        var purchaseResponse = await client.PostAsJsonAsync("/api/sales", Purchase(vehicle.Id));
         var sale = await purchaseResponse.Content.ReadFromJsonAsync<SaleResponse>();
 
-        client.DefaultRequestHeaders.Clear();
-        client.DefaultRequestHeaders.Add("X-Test-User", "main-service");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
+        Authenticate(client, "main-software", "vehicle-sales-service");
         var cancelResponse = await client.PutAsJsonAsync(
             $"/api/sales/payments/{sale!.PaymentCode}",
             new ProcessPaymentRequest { Status = "Canceled" });
+        client.DefaultRequestHeaders.Clear();
 
         cancelResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var available = await client.GetFromJsonAsync<List<VehicleResponse>>("/api/vehicles/available");
         available.Should().ContainSingle(item => item.Id == vehicle.Id);
+    }
+
+    [Fact]
+    public async Task ProcessPayment_ShouldReturnForbidden_WhenCallerIsAdmin()
+    {
+        await using var factory = new CustomWebApplicationFactory();
+        var client = factory.CreateClient();
+        Authenticate(client, "admin-test-001", "admin");
+
+        var response = await client.PutAsJsonAsync(
+            "/api/sales/payments/unknown",
+            new ProcessPaymentRequest { Status = "Completed" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    private static PurchaseVehicleRequest Purchase(Guid vehicleId) => new()
+    {
+        VehicleId = vehicleId,
+        BuyerCpf = "52998224725"
+    };
+
+    private static async Task<VehicleResponse> SyncVehicleAsync(
+        HttpClient client,
+        string brand,
+        string model,
+        decimal price)
+    {
+        Authenticate(client, "main-software", "vehicle-sales-service");
+        var response = await client.PutAsJsonAsync($"/api/internal/vehicles/{Guid.NewGuid()}", new SyncVehicleRequest
+        {
+            Brand = brand,
+            Model = model,
+            Year = 2022,
+            Color = "Prata",
+            Price = price
+        });
+        return (await response.Content.ReadFromJsonAsync<VehicleResponse>())!;
+    }
+
+    private static void Authenticate(HttpClient client, string user, string role)
+    {
+        client.DefaultRequestHeaders.Clear();
+        client.DefaultRequestHeaders.Add("X-Test-User", user);
+        client.DefaultRequestHeaders.Add("X-Test-Role", role);
     }
 }

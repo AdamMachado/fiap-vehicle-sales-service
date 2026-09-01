@@ -8,12 +8,12 @@
   "roles": {
     "realm": [
       {
-        "name": "admin",
-        "description": "Pode cadastrar e editar veículos"
-      },
-      {
         "name": "buyer",
         "description": "Pode comprar veículos"
+      },
+      {
+        "name": "vehicle-sales-service",
+        "description": "Permite comunicação interna do software principal com o serviço de vendas"
       }
     ]
   },
@@ -45,28 +45,24 @@
         "basic",
         "email"
       ]
+    },
+    {
+      "clientId": "main-software",
+      "name": "Software Principal",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "main-software-local-secret",
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "roles"
+      ]
     }
   ],
   "users": [
-    {
-      "username": "admin@test.com",
-      "email": "admin@test.com",
-      "firstName": "Administrador",
-      "lastName": "FIAP",
-      "enabled": true,
-      "emailVerified": true,
-      "requiredActions": [],
-      "credentials": [
-        {
-          "type": "password",
-          "value": "123456",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "admin"
-      ]
-    },
     {
       "username": "buyer@test.com",
       "email": "buyer@test.com",
@@ -84,6 +80,14 @@
       ],
       "realmRoles": [
         "buyer"
+      ]
+    },
+    {
+      "username": "service-account-main-software",
+      "enabled": true,
+      "serviceAccountClientId": "main-software",
+      "realmRoles": [
+        "vehicle-sales-service"
       ]
     }
   ]
