@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Fiap.VehicleSales.Api/Fiap.VehicleSales.Api.csproj" Id="65f82044-3e3f-4066-8308-243a164a79a9" />
+    <Project Path="src/Fiap.VehicleSales.Application/Fiap.VehicleSales.Application.csproj" />
+    <Project Path="src/Fiap.VehicleSales.Domain/Fiap.VehicleSales.Domain.csproj" />
+    <Project Path="src/Fiap.VehicleSales.Infrastructure/Fiap.VehicleSales.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Fiap.VehicleSales.IntegrationTests/Fiap.VehicleSales.IntegrationTests.csproj" />
+    <Project Path="tests/Fiap.VehicleSales.UnitTests/Fiap.VehicleSales.UnitTests.csproj" />
+  </Folder>
+</Solution>
