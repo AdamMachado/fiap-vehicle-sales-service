@@ -35,7 +35,8 @@ public sealed class SalesControllerTests
 
         var purchaseRequest = new PurchaseVehicleRequest
         {
-            VehicleId = vehicle!.Id
+            VehicleId = vehicle!.Id,
+            BuyerCpf = "52998224725"
         };
 
         // Act
@@ -50,8 +51,10 @@ public sealed class SalesControllerTests
         sale!.Id.Should().NotBeEmpty();
         sale.VehicleId.Should().Be(vehicle.Id);
         sale.BuyerId.Should().Be("buyer-test-001");
+        sale.BuyerCpf.Should().Be("52998224725");
+        sale.PaymentCode.Should().NotBeNullOrWhiteSpace();
         sale.Price.Should().Be(120000m);
-        sale.Status.Should().Be("Completed");
+        sale.Status.Should().Be("Pending");
     }
 
     [Fact]
@@ -63,7 +66,8 @@ public sealed class SalesControllerTests
 
         var request = new PurchaseVehicleRequest
         {
-            VehicleId = Guid.NewGuid()
+            VehicleId = Guid.NewGuid(),
+            BuyerCpf = "52998224725"
         };
 
         // Act
@@ -85,7 +89,8 @@ public sealed class SalesControllerTests
 
         var request = new PurchaseVehicleRequest
         {
-            VehicleId = Guid.NewGuid()
+            VehicleId = Guid.NewGuid(),
+            BuyerCpf = "52998224725"
         };
 
         // Act
@@ -120,10 +125,23 @@ public sealed class SalesControllerTests
         client.DefaultRequestHeaders.Add("X-Test-User", "buyer-test-001");
         client.DefaultRequestHeaders.Add("X-Test-Role", "buyer");
 
-        await client.PostAsJsonAsync("/api/sales", new PurchaseVehicleRequest
+        var purchaseResponse = await client.PostAsJsonAsync("/api/sales", new PurchaseVehicleRequest
         {
-            VehicleId = vehicle!.Id
+            VehicleId = vehicle!.Id,
+            BuyerCpf = "52998224725"
         });
+
+        var sale = await purchaseResponse.Content.ReadFromJsonAsync<SaleResponse>();
+
+        client.DefaultRequestHeaders.Clear();
+        client.DefaultRequestHeaders.Add("X-Test-User", "main-service");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
+
+        var paymentResponse = await client.PutAsJsonAsync(
+            $"/api/sales/payments/{sale!.PaymentCode}",
+            new ProcessPaymentRequest { Status = "Completed" });
+
+        paymentResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         client.DefaultRequestHeaders.Clear();
 
@@ -145,5 +163,41 @@ public sealed class SalesControllerTests
         soldVehicles!.Should().HaveCount(1);
         soldVehicles[0].Id.Should().Be(vehicle.Id);
         soldVehicles[0].Status.Should().Be("Sold");
+    }
+
+    [Fact]
+    public async Task ProcessPayment_ShouldReleaseVehicle_WhenPaymentIsCanceled()
+    {
+        await using var factory = new CustomWebApplicationFactory();
+        var client = factory.CreateClient();
+
+        client.DefaultRequestHeaders.Add("X-Test-User", "admin-test-001");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
+        var createResponse = await client.PostAsJsonAsync("/api/vehicles", new CreateVehicleRequest
+        {
+            Brand = "Ford", Model = "Ka", Year = 2020, Color = "Branco", Price = 50000m
+        });
+        var vehicle = await createResponse.Content.ReadFromJsonAsync<VehicleResponse>();
+
+        client.DefaultRequestHeaders.Clear();
+        client.DefaultRequestHeaders.Add("X-Test-User", "buyer-test-001");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "buyer");
+        var purchaseResponse = await client.PostAsJsonAsync("/api/sales", new PurchaseVehicleRequest
+        {
+            VehicleId = vehicle!.Id,
+            BuyerCpf = "52998224725"
+        });
+        var sale = await purchaseResponse.Content.ReadFromJsonAsync<SaleResponse>();
+
+        client.DefaultRequestHeaders.Clear();
+        client.DefaultRequestHeaders.Add("X-Test-User", "main-service");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
+        var cancelResponse = await client.PutAsJsonAsync(
+            $"/api/sales/payments/{sale!.PaymentCode}",
+            new ProcessPaymentRequest { Status = "Canceled" });
+
+        cancelResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var available = await client.GetFromJsonAsync<List<VehicleResponse>>("/api/vehicles/available");
+        available.Should().ContainSingle(item => item.Id == vehicle.Id);
     }
 }

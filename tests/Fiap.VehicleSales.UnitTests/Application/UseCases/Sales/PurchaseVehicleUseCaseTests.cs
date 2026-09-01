@@ -28,7 +28,8 @@ public sealed class PurchaseVehicleUseCaseTests
 
         var request = new PurchaseVehicleRequest
         {
-            VehicleId = vehicle.Id
+            VehicleId = vehicle.Id,
+            BuyerCpf = "52998224725"
         };
 
         var buyerId = "buyer-test-001";
@@ -40,10 +41,12 @@ public sealed class PurchaseVehicleUseCaseTests
         Assert.NotEqual(Guid.Empty, response.Id);
         Assert.Equal(vehicle.Id, response.VehicleId);
         Assert.Equal(buyerId, response.BuyerId);
+        Assert.Equal("52998224725", response.BuyerCpf);
+        Assert.False(string.IsNullOrWhiteSpace(response.PaymentCode));
         Assert.Equal(120000m, response.Price);
-        Assert.Equal("Completed", response.Status);
+        Assert.Equal("Pending", response.Status);
 
-        Assert.Equal(VehicleStatus.Sold, vehicle.Status);
+        Assert.Equal(VehicleStatus.Reserved, vehicle.Status);
         Assert.False(vehicle.IsAvailable());
 
         Assert.Single(saleRepository.Sales);
@@ -66,7 +69,8 @@ public sealed class PurchaseVehicleUseCaseTests
 
         var request = new PurchaseVehicleRequest
         {
-            VehicleId = Guid.NewGuid()
+            VehicleId = Guid.NewGuid(),
+            BuyerCpf = "52998224725"
         };
 
         // Act
@@ -94,7 +98,8 @@ public sealed class PurchaseVehicleUseCaseTests
 
         var request = new PurchaseVehicleRequest
         {
-            VehicleId = Guid.NewGuid()
+            VehicleId = Guid.NewGuid(),
+            BuyerCpf = "52998224725"
         };
 
         // Act
@@ -115,6 +120,7 @@ public sealed class PurchaseVehicleUseCaseTests
         var unitOfWork = new FakeUnitOfWork();
 
         var vehicle = new Vehicle("Toyota", "Corolla", 2022, "Prata", 120000m);
+        vehicle.Reserve();
         vehicle.MarkAsSold();
 
         await vehicleRepository.AddAsync(vehicle);
@@ -127,7 +133,8 @@ public sealed class PurchaseVehicleUseCaseTests
 
         var request = new PurchaseVehicleRequest
         {
-            VehicleId = vehicle.Id
+            VehicleId = vehicle.Id,
+            BuyerCpf = "52998224725"
         };
 
         // Act

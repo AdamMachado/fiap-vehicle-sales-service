@@ -12,8 +12,11 @@ public static class SaleMapper
             Id = sale.Id,
             VehicleId = sale.VehicleId,
             BuyerId = sale.BuyerId,
+            BuyerCpf = sale.BuyerCpf,
+            PaymentCode = sale.PaymentCode,
             Price = sale.Price,
             SaleDate = sale.SaleDate,
+            PaymentProcessedAt = sale.PaymentProcessedAt,
             Status = sale.Status.ToString()
         };
     }

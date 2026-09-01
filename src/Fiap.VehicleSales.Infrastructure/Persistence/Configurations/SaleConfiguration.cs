@@ -19,6 +19,14 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .IsRequired()
             .HasMaxLength(150);
 
+        builder.Property(sale => sale.BuyerCpf)
+            .IsRequired()
+            .HasMaxLength(11);
+
+        builder.Property(sale => sale.PaymentCode)
+            .IsRequired()
+            .HasMaxLength(64);
+
         builder.Property(sale => sale.Price)
             .IsRequired()
             .HasColumnType("decimal(18,2)");
@@ -26,13 +34,21 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(sale => sale.SaleDate)
             .IsRequired();
 
+        builder.Property(sale => sale.PaymentProcessedAt);
+
         builder.Property(sale => sale.Status)
             .IsRequired()
             .HasConversion<int>();
 
         builder.HasIndex(sale => sale.VehicleId)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("\"Status\" = 1");
 
         builder.HasIndex(sale => sale.BuyerId);
+
+        builder.HasIndex(sale => sale.BuyerCpf);
+
+        builder.HasIndex(sale => sale.PaymentCode)
+            .IsUnique();
     }
 }

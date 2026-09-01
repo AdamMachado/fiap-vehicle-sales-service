@@ -3,5 +3,6 @@
 public enum VehicleStatus
 {
     Available = 1,
-    Sold = 2
+    Reserved = 2,
+    Sold = 3
 }

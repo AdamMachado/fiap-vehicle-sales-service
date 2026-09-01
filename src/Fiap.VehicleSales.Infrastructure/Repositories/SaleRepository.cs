@@ -17,12 +17,23 @@ public sealed class SaleRepository : ISaleRepository
     public async Task AddAsync(Sale sale)
     {
         await _context.Sales.AddAsync(sale);
-        await _context.SaveChangesAsync();
     }
 
     public async Task<Sale?> GetByIdAsync(Guid id)
     {
         return await _context.Sales
             .FirstOrDefaultAsync(sale => sale.Id == id);
+    }
+
+    public async Task<Sale?> GetByPaymentCodeAsync(string paymentCode)
+    {
+        return await _context.Sales
+            .FirstOrDefaultAsync(sale => sale.PaymentCode == paymentCode);
+    }
+
+    public Task UpdateAsync(Sale sale)
+    {
+        _context.Sales.Update(sale);
+        return Task.CompletedTask;
     }
 }

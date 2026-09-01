@@ -1,4 +1,4 @@
-﻿using Fiap.VehicleSales.Domain.Entities;
+using Fiap.VehicleSales.Domain.Entities;
 using Fiap.VehicleSales.Domain.Enums;
 using Fiap.VehicleSales.Domain.Exceptions;
 
@@ -6,95 +6,121 @@ namespace Fiap.VehicleSales.UnitTests.Domain.Entities;
 
 public sealed class SaleTests
 {
+    private const string ValidCpf = "52998224725";
+
     [Fact]
-    public void Constructor_ShouldCreateSale_WhenDataIsValid()
+    public void Constructor_ShouldCreatePendingSale_WhenDataIsValid()
     {
-        // Arrange
         var vehicleId = Guid.NewGuid();
-        var buyerId = "buyer-test-001";
-        var price = 120000m;
+        var sale = new Sale(vehicleId, "buyer-test-001", ValidCpf, 120000m, "payment-001");
 
-        // Act
-        var sale = new Sale(vehicleId, buyerId, price);
-
-        // Assert
         Assert.NotEqual(Guid.Empty, sale.Id);
         Assert.Equal(vehicleId, sale.VehicleId);
-        Assert.Equal(buyerId, sale.BuyerId);
-        Assert.Equal(price, sale.Price);
-        Assert.Equal(SaleStatus.Completed, sale.Status);
-        Assert.NotEqual(default, sale.SaleDate);
-    }
-
-    [Fact]
-    public void Constructor_ShouldTrimBuyerId_WhenBuyerIdHasWhiteSpaces()
-    {
-        // Act
-        var sale = new Sale(Guid.NewGuid(), " buyer-test-001 ", 120000m);
-
-        // Assert
         Assert.Equal("buyer-test-001", sale.BuyerId);
+        Assert.Equal(ValidCpf, sale.BuyerCpf);
+        Assert.Equal("payment-001", sale.PaymentCode);
+        Assert.Equal(120000m, sale.Price);
+        Assert.Equal(SaleStatus.Pending, sale.Status);
+        Assert.NotEqual(default, sale.SaleDate);
+        Assert.Null(sale.PaymentProcessedAt);
     }
 
     [Fact]
-    public void Constructor_ShouldThrowDomainException_WhenVehicleIdIsEmpty()
+    public void Constructor_ShouldNormalizeCpfAndTrimIdentifiers()
     {
-        // Act
-        var act = () => new Sale(Guid.Empty, "buyer-test-001", 120000m);
+        var sale = new Sale(Guid.NewGuid(), " buyer-test-001 ", "529.982.247-25", 120000m, " payment-001 ");
 
-        // Assert
+        Assert.Equal("buyer-test-001", sale.BuyerId);
+        Assert.Equal(ValidCpf, sale.BuyerCpf);
+        Assert.Equal("payment-001", sale.PaymentCode);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("11111111111")]
+    [InlineData("12345678900")]
+    public void Constructor_ShouldThrowDomainException_WhenCpfIsInvalid(string cpf)
+    {
+        var act = () => new Sale(Guid.NewGuid(), "buyer-test-001", cpf, 120000m, "payment-001");
+        Assert.Throws<DomainException>(act);
+    }
+
+    [Fact]
+    public void Constructor_ShouldRejectEmptyVehicleId()
+    {
+        var act = () => new Sale(Guid.Empty, "buyer-test-001", ValidCpf, 120000m, "payment-001");
         Assert.Throws<DomainException>(act);
     }
 
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
-    public void Constructor_ShouldThrowDomainException_WhenBuyerIdIsInvalid(string buyerId)
+    public void Constructor_ShouldRejectEmptyBuyerId(string buyerId)
     {
-        // Act
-        var act = () => new Sale(Guid.NewGuid(), buyerId, 120000m);
+        var act = () => new Sale(Guid.NewGuid(), buyerId, ValidCpf, 120000m, "payment-001");
+        Assert.Throws<DomainException>(act);
+    }
 
-        // Assert
+    [Fact]
+    public void Constructor_ShouldRejectEmptyPaymentCode()
+    {
+        var act = () => new Sale(Guid.NewGuid(), "buyer-test-001", ValidCpf, 120000m, " ");
         Assert.Throws<DomainException>(act);
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    [InlineData(-1000)]
-    public void Constructor_ShouldThrowDomainException_WhenPriceIsInvalid(decimal price)
+    public void Constructor_ShouldRejectInvalidPrice(decimal price)
     {
-        // Act
-        var act = () => new Sale(Guid.NewGuid(), "buyer-test-001", price);
-
-        // Assert
+        var act = () => new Sale(Guid.NewGuid(), "buyer-test-001", ValidCpf, price, "payment-001");
         Assert.Throws<DomainException>(act);
     }
 
     [Fact]
-    public void Cancel_ShouldChangeStatusToCanceled_WhenSaleIsCompleted()
+    public void CompletePayment_ShouldBeIdempotent()
     {
-        // Arrange
-        var sale = new Sale(Guid.NewGuid(), "buyer-test-001", 120000m);
+        var sale = CreateSale();
 
-        // Act
-        sale.Cancel();
+        Assert.True(sale.CompletePayment());
+        var processedAt = sale.PaymentProcessedAt;
+        Assert.False(sale.CompletePayment());
 
-        // Assert
+        Assert.Equal(SaleStatus.Completed, sale.Status);
+        Assert.Equal(processedAt, sale.PaymentProcessedAt);
+    }
+
+    [Fact]
+    public void CancelPayment_ShouldBeIdempotent()
+    {
+        var sale = CreateSale();
+
+        Assert.True(sale.CancelPayment());
+        var processedAt = sale.PaymentProcessedAt;
+        Assert.False(sale.CancelPayment());
+
         Assert.Equal(SaleStatus.Canceled, sale.Status);
+        Assert.Equal(processedAt, sale.PaymentProcessedAt);
     }
 
     [Fact]
-    public void Cancel_ShouldThrowDomainException_WhenSaleIsAlreadyCanceled()
+    public void CompletePayment_ShouldRejectCanceledSale()
     {
-        // Arrange
-        var sale = new Sale(Guid.NewGuid(), "buyer-test-001", 120000m);
-        sale.Cancel();
+        var sale = CreateSale();
+        sale.CancelPayment();
 
-        // Act
-        var act = () => sale.Cancel();
-
-        // Assert
-        Assert.Throws<DomainException>(act);
+        Assert.Throws<DomainException>(() => sale.CompletePayment());
     }
+
+    [Fact]
+    public void CancelPayment_ShouldRejectCompletedSale()
+    {
+        var sale = CreateSale();
+        sale.CompletePayment();
+
+        Assert.Throws<DomainException>(() => sale.CancelPayment());
+    }
+
+    private static Sale CreateSale() =>
+        new(Guid.NewGuid(), "buyer-test-001", ValidCpf, 120000m, "payment-001");
 }

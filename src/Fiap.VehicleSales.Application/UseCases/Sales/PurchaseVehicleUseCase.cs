@@ -35,9 +35,10 @@ public sealed class PurchaseVehicleUseCase
         if (!vehicle.IsAvailable())
             throw new AppException("Veículo não está disponível para venda.");
 
-        var sale = new Sale(vehicle.Id, buyerId, vehicle.Price);
+        var paymentCode = Guid.NewGuid().ToString("N");
+        var sale = new Sale(vehicle.Id, buyerId, request.BuyerCpf, vehicle.Price, paymentCode);
 
-        vehicle.MarkAsSold();
+        vehicle.Reserve();
 
         await _saleRepository.AddAsync(sale);
         await _vehicleRepository.UpdateAsync(vehicle);
