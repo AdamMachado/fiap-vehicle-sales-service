@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Include>[Fiap.VehicleSales.*]*</Include>
+          <Exclude>[Fiap.VehicleSales.Api]Program,[Fiap.VehicleSales.Infrastructure]Fiap.VehicleSales.Infrastructure.DependencyInjection.*,[Fiap.VehicleSales.Infrastructure]Fiap.VehicleSales.Infrastructure.Migrations.*</Exclude>
+          <ExcludeByFile>**/obj/**;**/Migrations/**</ExcludeByFile>
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

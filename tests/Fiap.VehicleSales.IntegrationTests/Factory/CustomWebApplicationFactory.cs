@@ -16,6 +16,14 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private SqliteConnection? _connection;
 
+    static CustomWebApplicationFactory()
+    {
+        SQLitePCL.raw.SetProvider(
+            OperatingSystem.IsWindows()
+                ? new SQLitePCL.SQLite3Provider_winsqlite3()
+                : new SQLitePCL.SQLite3Provider_sqlite3());
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
