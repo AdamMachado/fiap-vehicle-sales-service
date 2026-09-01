@@ -1,6 +1,8 @@
 using Fiap.VehicleSales.Application.UseCases.Sales;
 using Fiap.VehicleSales.Application.UseCases.Vehicles;
 using Fiap.VehicleSales.Api.Authentication;
+using Fiap.VehicleSales.Api.HealthChecks;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Authentication;
 using Fiap.VehicleSales.Infrastructure.DependencyInjection;
 using Fiap.VehicleSales.Infrastructure.Persistence;
@@ -83,6 +85,10 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("vehicle-sales-service"));
 });
 
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live"])
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+
 var app = builder.Build();
 
 if (!app.Environment.IsEnvironment("Testing"))
@@ -104,6 +110,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live")
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready")
+});
 
 app.Run();
 

@@ -41,14 +41,20 @@ jobs:
         run: dotnet build --configuration $CONFIGURATION --no-restore
 
       - name: Test
-        run: dotnet test --configuration $CONFIGURATION --no-build --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test --configuration $CONFIGURATION --no-build --logger "trx;LogFilePrefix=test-results" --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory TestResults
+
+      - name: Enforce 80 percent coverage
+        shell: pwsh
+        run: ./scripts/check-coverage.ps1 -ResultsPath TestResults -Minimum 80
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results
-          path: "**/TestResults/*.trx"
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml
 
   docker-build:
     name: docker-build

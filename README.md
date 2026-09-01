@@ -600,6 +600,15 @@ Para executar:
 dotnet test
 ```
 
+Para executar com cobertura e validar o mínimo obrigatório de 80%:
+
+```powershell
+dotnet test --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory TestResults
+./scripts/check-coverage.ps1 -ResultsPath TestResults -Minimum 80
+```
+
+O cálculo consolida unitários e integração. Somente código gerado, migrations e composition roots são excluídos; controllers, autenticação, domínio, aplicação e repositórios permanecem na medição.
+
 Atualmente, a suíte possui testes unitários e de integração,
 cobrindo:
 
@@ -626,6 +635,7 @@ Restore
 Build
 Test
 Upload dos resultados de teste
+Validação de cobertura mínima de 80%
 Docker build
 Validação do ambiente completo com Docker Compose
 Validação da autenticação no Keycloak
@@ -646,6 +656,41 @@ ghcr.io/adammachado/fiap-vehicle-sales-api:latest
 O pipeline utiliza o `GITHUB_TOKEN` fornecido pelo GitHub Actions e a
 permissão `packages: write`. O deploy da imagem em um ambiente público ainda
 não faz parte deste workflow.
+
+---
+
+## Health checks
+
+| Endpoint | Finalidade |
+| --- | --- |
+| `GET /health/live` | Confirma que o processo da API está ativo |
+| `GET /health/ready` | Confirma acesso ao banco transacional |
+
+Esses endpoints são usados pelas probes do Kubernetes.
+
+---
+
+## Kubernetes
+
+Os manifests estão em `k8s/` e incluem namespace, ConfigMap, modelo de Secret, Deployment e Service da API, além de StatefulSet, Service e volume persistente do PostgreSQL segregado.
+
+Antes da publicação:
+
+1. substitua `CHANGE_ME` em `k8s/secret.example.yaml` usando o gerenciador de secrets do ambiente;
+2. ajuste as URLs do Keycloak em `k8s/configmap.yaml`;
+3. fixe a tag da imagem em `k8s/api.yaml` para a versão publicada.
+
+Validação local da composição:
+
+```bash
+kubectl kustomize k8s
+```
+
+Aplicação em um cluster configurado:
+
+```bash
+kubectl apply -k k8s
+```
 
 ---
 
