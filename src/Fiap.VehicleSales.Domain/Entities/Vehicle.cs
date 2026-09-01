@@ -37,8 +37,8 @@ public sealed class Vehicle : Entity
 
     public void Update(string brand, string model, int year, string color, decimal price)
     {
-        if (Status == VehicleStatus.Sold)
-            throw new DomainException("Não é possível editar um veículo vendido.");
+        if (Status != VehicleStatus.Available)
+            throw new DomainException("Somente um veículo disponível pode ser editado.");
 
         Validate(brand, model, year, color, price);
 
@@ -55,7 +55,28 @@ public sealed class Vehicle : Entity
         if (Status == VehicleStatus.Sold)
             throw new DomainException("Este veículo já foi vendido.");
 
+        if (Status != VehicleStatus.Reserved)
+            throw new DomainException("Somente um veículo reservado pode ser marcado como vendido.");
+
         Status = VehicleStatus.Sold;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Reserve()
+    {
+        if (Status != VehicleStatus.Available)
+            throw new DomainException("Este veículo não está disponível para reserva.");
+
+        Status = VehicleStatus.Reserved;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ReleaseReservation()
+    {
+        if (Status != VehicleStatus.Reserved)
+            throw new DomainException("Somente um veículo reservado pode ser liberado.");
+
+        Status = VehicleStatus.Available;
         UpdatedAt = DateTime.UtcNow;
     }
 

@@ -13,10 +13,14 @@ namespace Fiap.VehicleSales.Api.Controllers;
 public sealed class SalesController : ControllerBase
 {
     private readonly PurchaseVehicleUseCase _purchaseVehicleUseCase;
+    private readonly ProcessPaymentUseCase _processPaymentUseCase;
 
-    public SalesController(PurchaseVehicleUseCase purchaseVehicleUseCase)
+    public SalesController(
+        PurchaseVehicleUseCase purchaseVehicleUseCase,
+        ProcessPaymentUseCase processPaymentUseCase)
     {
         _purchaseVehicleUseCase = purchaseVehicleUseCase;
+        _processPaymentUseCase = processPaymentUseCase;
     }
 
     [Authorize(Roles = "buyer")]
@@ -42,6 +46,27 @@ public sealed class SalesController : ControllerBase
         catch (DomainException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpPut("payments/{paymentCode}")]
+    public async Task<IActionResult> ProcessPayment(
+        string paymentCode,
+        [FromBody] ProcessPaymentRequest request)
+    {
+        try
+        {
+            var response = await _processPaymentUseCase.ExecuteAsync(paymentCode, request);
+            return Ok(response);
+        }
+        catch (AppException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (DomainException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
     }
 }

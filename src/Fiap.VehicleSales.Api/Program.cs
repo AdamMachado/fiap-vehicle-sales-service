@@ -51,6 +51,7 @@ builder.Services.AddScoped<GetVehicleByIdUseCase>();
 builder.Services.AddScoped<ListAvailableVehiclesUseCase>();
 builder.Services.AddScoped<ListSoldVehiclesUseCase>();
 builder.Services.AddScoped<PurchaseVehicleUseCase>();
+builder.Services.AddScoped<ProcessPaymentUseCase>();
 builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 
 if (!builder.Environment.IsEnvironment("Testing"))

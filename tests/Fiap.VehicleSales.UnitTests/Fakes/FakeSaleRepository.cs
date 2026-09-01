@@ -21,4 +21,15 @@ public sealed class FakeSaleRepository : ISaleRepository
 
         return Task.FromResult(sale);
     }
+
+    public Task<Sale?> GetByPaymentCodeAsync(string paymentCode)
+    {
+        var sale = _sales.FirstOrDefault(sale => sale.PaymentCode == paymentCode);
+        return Task.FromResult(sale);
+    }
+
+    public Task UpdateAsync(Sale sale)
+    {
+        return Task.CompletedTask;
+    }
 }

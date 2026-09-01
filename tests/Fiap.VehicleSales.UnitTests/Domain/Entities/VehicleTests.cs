@@ -143,6 +143,7 @@ public sealed class VehicleTests
         var vehicle = new Vehicle("Toyota", "Corolla", 2022, "Prata", 120000m);
 
         // Act
+        vehicle.Reserve();
         vehicle.MarkAsSold();
 
         // Assert
@@ -156,6 +157,7 @@ public sealed class VehicleTests
     {
         // Arrange
         var vehicle = new Vehicle("Toyota", "Corolla", 2022, "Prata", 120000m);
+        vehicle.Reserve();
         vehicle.MarkAsSold();
 
         // Act
@@ -170,12 +172,38 @@ public sealed class VehicleTests
     {
         // Arrange
         var vehicle = new Vehicle("Toyota", "Corolla", 2022, "Prata", 120000m);
+        vehicle.Reserve();
         vehicle.MarkAsSold();
 
         // Act
         var act = () => vehicle.Update("Honda", "Civic", 2021, "Preto", 115000m);
 
         // Assert
+        Assert.Throws<DomainException>(act);
+    }
+
+    [Fact]
+    public void ReserveAndReleaseReservation_ShouldRestoreAvailability()
+    {
+        var vehicle = new Vehicle("Toyota", "Corolla", 2022, "Prata", 120000m);
+
+        vehicle.Reserve();
+        Assert.Equal(VehicleStatus.Reserved, vehicle.Status);
+        Assert.False(vehicle.IsAvailable());
+
+        vehicle.ReleaseReservation();
+        Assert.Equal(VehicleStatus.Available, vehicle.Status);
+        Assert.True(vehicle.IsAvailable());
+    }
+
+    [Fact]
+    public void Update_ShouldThrowDomainException_WhenVehicleIsReserved()
+    {
+        var vehicle = new Vehicle("Toyota", "Corolla", 2022, "Prata", 120000m);
+        vehicle.Reserve();
+
+        var act = () => vehicle.Update("Honda", "Civic", 2021, "Preto", 115000m);
+
         Assert.Throws<DomainException>(act);
     }
 }
