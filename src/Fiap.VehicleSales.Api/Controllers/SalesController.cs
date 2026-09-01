@@ -49,7 +49,7 @@ public sealed class SalesController : ControllerBase
         }
     }
 
-    [Authorize(Roles = "admin")]
+    [Authorize(Policy = "InternalService")]
     [HttpPut("payments/{paymentCode}")]
     public async Task<IActionResult> ProcessPayment(
         string paymentCode,

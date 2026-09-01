@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using Fiap.VehicleSales.Application.DTOs;
 using Fiap.VehicleSales.IntegrationTests.Factory;
@@ -9,117 +9,92 @@ namespace Fiap.VehicleSales.IntegrationTests.Controllers;
 public sealed class VehiclesControllerTests
 {
     [Fact]
-    public async Task Create_ShouldReturnCreated_WhenUserIsAdmin()
+    public async Task Sync_ShouldCreateAndUpdateVehicle_WhenCallerIsInternalService()
     {
-        // Arrange
         await using var factory = new CustomWebApplicationFactory();
         var client = factory.CreateClient();
+        AuthenticateAsService(client);
+        var vehicleId = Guid.NewGuid();
 
-        client.DefaultRequestHeaders.Add("X-Test-User", "admin-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
+        var createResponse = await client.PutAsJsonAsync(
+            $"/api/internal/vehicles/{vehicleId}",
+            Request("Toyota", "Corolla", 120000m));
+        var updateResponse = await client.PutAsJsonAsync(
+            $"/api/internal/vehicles/{vehicleId}",
+            Request("Toyota", "Corolla XEi", 118000m));
 
-        var request = new CreateVehicleRequest
-        {
-            Brand = "Toyota",
-            Model = "Corolla",
-            Year = 2022,
-            Color = "Prata",
-            Price = 120000m
-        };
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var vehicle = await updateResponse.Content.ReadFromJsonAsync<VehicleResponse>();
+        vehicle!.Id.Should().Be(vehicleId);
+        vehicle.Model.Should().Be("Corolla XEi");
+        vehicle.Price.Should().Be(118000m);
+    }
 
-        // Act
-        var response = await client.PostAsJsonAsync("/api/vehicles", request);
+    [Theory]
+    [InlineData("buyer")]
+    [InlineData("admin")]
+    public async Task Sync_ShouldReturnForbidden_WhenCallerIsNotInternalService(string role)
+    {
+        await using var factory = new CustomWebApplicationFactory();
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", "unauthorized-user");
+        client.DefaultRequestHeaders.Add("X-Test-Role", role);
 
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var response = await client.PutAsJsonAsync(
+            $"/api/internal/vehicles/{Guid.NewGuid()}",
+            Request("Toyota", "Corolla", 120000m));
 
-        var vehicle = await response.Content.ReadFromJsonAsync<VehicleResponse>();
-
-        vehicle.Should().NotBeNull();
-        vehicle!.Id.Should().NotBeEmpty();
-        vehicle.Brand.Should().Be("Toyota");
-        vehicle.Model.Should().Be("Corolla");
-        vehicle.Status.Should().Be("Available");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
-    public async Task Create_ShouldReturnForbidden_WhenUserIsBuyer()
+    public async Task PublicCreateAndUpdate_ShouldNotExist()
     {
-        // Arrange
         await using var factory = new CustomWebApplicationFactory();
         var client = factory.CreateClient();
 
-        client.DefaultRequestHeaders.Add("X-Test-User", "buyer-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "buyer");
+        var create = await client.PostAsJsonAsync("/api/vehicles", Request("Toyota", "Corolla", 120000m));
+        var update = await client.PutAsJsonAsync($"/api/vehicles/{Guid.NewGuid()}", Request("Toyota", "Corolla", 120000m));
 
-        var request = new CreateVehicleRequest
-        {
-            Brand = "Toyota",
-            Model = "Corolla",
-            Year = 2022,
-            Color = "Prata",
-            Price = 120000m
-        };
-
-        // Act
-        var response = await client.PostAsJsonAsync("/api/vehicles", request);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        create.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        update.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
     }
 
     [Fact]
     public async Task GetAvailable_ShouldReturnVehiclesOrderedByPrice()
     {
-        // Arrange
         await using var factory = new CustomWebApplicationFactory();
         var client = factory.CreateClient();
+        AuthenticateAsService(client);
 
-        client.DefaultRequestHeaders.Add("X-Test-User", "admin-test-001");
-        client.DefaultRequestHeaders.Add("X-Test-Role", "admin");
-
-        await client.PostAsJsonAsync("/api/vehicles", new CreateVehicleRequest
-        {
-            Brand = "Honda",
-            Model = "Civic",
-            Year = 2021,
-            Color = "Preto",
-            Price = 115000m
-        });
-
-        await client.PostAsJsonAsync("/api/vehicles", new CreateVehicleRequest
-        {
-            Brand = "Fiat",
-            Model = "Argo",
-            Year = 2020,
-            Color = "Branco",
-            Price = 65000m
-        });
-
-        await client.PostAsJsonAsync("/api/vehicles", new CreateVehicleRequest
-        {
-            Brand = "Toyota",
-            Model = "Corolla",
-            Year = 2022,
-            Color = "Prata",
-            Price = 120000m
-        });
-
+        await SyncAsync(client, Request("Honda", "Civic", 115000m));
+        await SyncAsync(client, Request("Fiat", "Argo", 65000m));
+        await SyncAsync(client, Request("Toyota", "Corolla", 120000m));
         client.DefaultRequestHeaders.Clear();
 
-        // Act
         var response = await client.GetAsync("/api/vehicles/available");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-
         var vehicles = await response.Content.ReadFromJsonAsync<List<VehicleResponse>>();
 
-        vehicles.Should().NotBeNull();
-        vehicles.Should().HaveCount(3);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        vehicles!.Select(vehicle => vehicle.Price).Should().ContainInOrder(65000m, 115000m, 120000m);
+    }
 
-        vehicles![0].Price.Should().Be(65000m);
-        vehicles[1].Price.Should().Be(115000m);
-        vehicles[2].Price.Should().Be(120000m);
+    private static Task<HttpResponseMessage> SyncAsync(HttpClient client, SyncVehicleRequest request) =>
+        client.PutAsJsonAsync($"/api/internal/vehicles/{Guid.NewGuid()}", request);
+
+    private static SyncVehicleRequest Request(string brand, string model, decimal price) => new()
+    {
+        Brand = brand,
+        Model = model,
+        Year = 2022,
+        Color = "Prata",
+        Price = price
+    };
+
+    private static void AuthenticateAsService(HttpClient client)
+    {
+        client.DefaultRequestHeaders.Add("X-Test-User", "main-software");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "vehicle-sales-service");
     }
 }

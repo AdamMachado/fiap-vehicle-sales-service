@@ -1,8 +1,8 @@
-# Fiap Vehicle Sales API
+# FIAP Vehicle Sales Service
 
-API backend desenvolvida para o Tech Challenge da Pós Tech FIAP — Fase 3 — curso SOAT.
+Microsserviço transacional de venda de veículos desenvolvido para o Tech Challenge da Pós Tech FIAP — Fase 4 — curso SOAT.
 
-O projeto simula uma plataforma para uma empresa de revenda de veículos automotores. A solução permite cadastrar veículos para venda, editar veículos, listar veículos disponíveis, listar veículos vendidos e realizar a compra de veículos por compradores cadastrados.
+Este repositório contém somente as responsabilidades do serviço de vendas: sincronização interna do catálogo, listagens, reserva, compra e processamento interno do resultado do pagamento. Cadastro, edição e webhook público pertencem ao software principal, mantido em outro repositório e integrado por HTTP.
 
 A autenticação e autorização dos compradores foi implementada de forma separada da API principal, utilizando Keycloak, conforme a proposta do desafio de manter os dados dos clientes separados dos dados transacionais de vendas.
 
@@ -35,29 +35,27 @@ Como o time de frontend será responsável pela interface, este projeto entrega 
 
 A API permite:
 
-* Cadastrar veículos para venda;
-* Editar dados de veículos;
+* Sincronizar internamente os veículos vindos do software principal;
 * Listar veículos disponíveis;
 * Listar veículos vendidos;
-* Realizar a compra de um veículo;
+* Reservar e iniciar a compra de um veículo;
+* Confirmar ou cancelar internamente o pagamento;
 * Permitir compra apenas para usuários autenticados;
-* Separar autenticação/autorização dos dados transacionais.
+* Proteger endpoints internos por uma credencial de serviço.
 
 ---
 
 ## Funcionalidades
 
-### Veículos
+### Catálogo transacional
 
-* Cadastro de veículo com:
+* Sincronização interna de veículo com:
 
   * Marca;
   * Modelo;
   * Ano;
   * Cor;
   * Preço.
-
-* Edição dos dados do veículo.
 
 * Listagem de veículos disponíveis para venda.
 
@@ -67,18 +65,21 @@ A API permite:
 
 ### Compras
 
-* Compra de veículo por usuário autenticado.
+* Compra de veículo por usuário autenticado e CPF válido.
 * Validação se o veículo existe.
 * Validação se o veículo está disponível.
-* Registro da venda.
-* Alteração automática do status do veículo para vendido.
+* Reserva do veículo enquanto o pagamento está pendente.
+* Confirmação transforma o veículo em vendido.
+* Cancelamento devolve o veículo para a listagem de disponíveis.
+* Processamento idempotente das notificações de pagamento.
 
 ### Autenticação e autorização
 
 * Autenticação separada usando Keycloak.
 * Usuários e roles gerenciados fora da API principal.
 * A API valida tokens JWT emitidos pelo Keycloak.
-* A venda armazena apenas o identificador do comprador vindo do token.
+* Compradores usam a role `buyer`.
+* O software principal usa client credentials e a role `vehicle-sales-service`.
 
 ---
 
@@ -284,14 +285,6 @@ Senha: admin
 
 ### Usuários de demonstração
 
-Administrador:
-
-```text
-Username: admin@test.com
-Password: 123456
-Role: admin
-```
-
 Comprador:
 
 ```text
@@ -328,23 +321,22 @@ $buyerTokenResponse.access_token
 
 ---
 
-### Token do administrador
+### Token do software principal
 
 PowerShell:
 
 ```powershell
-$adminTokenResponse = Invoke-RestMethod `
+$serviceTokenResponse = Invoke-RestMethod `
   -Method Post `
   -Uri "http://localhost:8080/realms/fiap-vehicle-sales/protocol/openid-connect/token" `
   -ContentType "application/x-www-form-urlencoded" `
   -Body @{
-    client_id = "vehicle-sales-api"
-    username = "admin@test.com"
-    password = "123456"
-    grant_type = "password"
+    client_id = "main-software"
+    client_secret = "main-software-local-secret"
+    grant_type = "client_credentials"
   }
 
-$adminTokenResponse.access_token
+$serviceTokenResponse.access_token
 ```
 
 ---
@@ -370,21 +362,15 @@ automaticamente.
 
 ## Endpoints principais
 
-### Veículos
-
-#### Cadastrar veículo
+### Sincronização interna do catálogo
 
 ```http
-POST /api/vehicles
+PUT /api/internal/vehicles/{id}
 ```
 
-Permissão:
+Permissão: role `vehicle-sales-service`, obtida pelo software principal via client credentials.
 
-```text
-admin
-```
-
-Body:
+O mesmo endpoint cria ou atualiza o veículo de forma idempotente. Veículos reservados ou vendidos não podem ser alterados.
 
 ```json
 {
@@ -396,33 +382,7 @@ Body:
 }
 ```
 
----
-
-#### Editar veículo
-
-```http
-PUT /api/vehicles/{id}
-```
-
-Permissão:
-
-```text
-admin
-```
-
-Body:
-
-```json
-{
-  "brand": "Toyota",
-  "model": "Corolla XEI",
-  "year": 2022,
-  "color": "Preto",
-  "price": 118000
-}
-```
-
----
+### Veículos
 
 #### Buscar veículo por ID
 
@@ -488,11 +448,28 @@ Body:
 
 ```json
 {
-  "vehicleId": "id-do-veiculo"
+  "vehicleId": "id-do-veiculo",
+  "buyerCpf": "52998224725"
 }
 ```
 
-A API identifica o comprador pelo token JWT enviado no header Authorization.
+A API identifica o comprador pelo token JWT, reserva o veículo e retorna uma venda `Pending` com `paymentCode`.
+
+#### Processar resultado do pagamento
+
+```http
+PUT /api/sales/payments/{paymentCode}
+```
+
+Permissão: role interna `vehicle-sales-service`.
+
+```json
+{
+  "status": "Completed"
+}
+```
+
+Também aceita `Canceled`. O processamento é idempotente.
 
 ---
 
@@ -506,14 +483,16 @@ O fluxo de compra funciona da seguinte forma:
 3. O comprador envia o token para a API.
 4. A API valida o token.
 5. A API extrai o identificador do comprador pelo claim sub.
-6. O comprador informa o ID do veículo desejado.
+6. O comprador informa o veículo e seu CPF.
 7. A API verifica se o veículo existe.
 8. A API verifica se o veículo está disponível.
-9. A API cria uma venda.
-10. A API salva o BuyerId na tabela Sales.
-11. A API altera o status do veículo para Sold.
-12. O veículo deixa de aparecer na listagem de disponíveis.
-13. O veículo passa a aparecer na listagem de vendidos.
+9. A API cria uma venda Pending e gera o código de pagamento.
+10. A API salva BuyerId e BuyerCpf na tabela Sales.
+11. A API altera o veículo para Reserved.
+12. O software principal recebe o webhook do processador.
+13. O software principal chama o endpoint interno de pagamento.
+14. Pagamento confirmado altera venda para Completed e veículo para Sold.
+15. Pagamento cancelado altera venda para Canceled e veículo para Available.
 ```
 
 ---
@@ -532,7 +511,7 @@ O Keycloak possui banco próprio e é responsável por:
 
 A API principal não armazena dados sensíveis do comprador, como nome, e-mail ou senha.
 
-Na tabela de vendas, a API salva apenas o identificador do comprador recebido no token JWT.
+Na tabela de vendas, a API salva o identificador do token e o CPF informado na compra.
 
 Exemplo:
 
@@ -548,12 +527,12 @@ Essa separação mantém os dados de autenticação fora da base transacional da
 
 | Endpoint                    | Permissão |
 | --------------------------- | --------- |
-| POST /api/vehicles          | admin     |
-| PUT /api/vehicles/{id}      | admin     |
+| PUT /api/internal/vehicles/{id} | vehicle-sales-service |
 | GET /api/vehicles/{id}      | público   |
 | GET /api/vehicles/available | público   |
 | GET /api/vehicles/sold      | público   |
 | POST /api/sales             | buyer     |
+| PUT /api/sales/payments/{paymentCode} | vehicle-sales-service |
 
 ---
 
@@ -579,7 +558,8 @@ Status possíveis:
 
 ```text
 1 = Available
-2 = Sold
+2 = Reserved
+3 = Sold
 ```
 
 ---
@@ -593,15 +573,19 @@ Tabela responsável por armazenar as vendas realizadas.
 | Id        | uuid      | Identificador da venda                    |
 | VehicleId | uuid      | Identificador do veículo vendido          |
 | BuyerId   | varchar   | Identificador do comprador vindo do token |
+| BuyerCpf  | varchar   | CPF normalizado do comprador              |
+| PaymentCode | varchar | Código único do pagamento                  |
 | Price     | decimal   | Preço no momento da venda                 |
 | SaleDate  | timestamp | Data da venda                             |
+| PaymentProcessedAt | timestamp | Data da confirmação ou cancelamento |
 | Status    | int       | Status da venda                           |
 
 Status possíveis:
 
 ```text
-1 = Completed
-2 = Canceled
+1 = Pending
+2 = Completed
+3 = Canceled
 ```
 
 ---
@@ -616,13 +600,15 @@ Para executar:
 dotnet test
 ```
 
-Atualmente, a suíte possui 32 testes unitários e 7 testes de integração,
+Atualmente, a suíte possui testes unitários e de integração,
 cobrindo:
 
-* Deve criar veículo com dados válidos;
+* Deve sincronizar o catálogo somente pela API interna;
 * Não deve criar veículo com preço inválido;
 * Não deve editar veículo vendido;
 * Deve comprar veículo disponível;
+* Deve reservar o veículo até o resultado do pagamento;
+* Deve confirmar ou cancelar o pagamento de forma idempotente;
 * Não deve comprar veículo já vendido;
 * Deve listar veículos disponíveis ordenados por preço;
 * Deve listar veículos vendidos ordenados por preço.
@@ -679,13 +665,9 @@ docker compose up -d --build
 http://localhost:5000/swagger
 ```
 
-### 3. Gerar token de admin
+### 3. Gerar token do software principal
 
-Use o token do usuário:
-
-```text
-admin@test.com
-```
+Use o fluxo `client_credentials` do client `main-software`.
 
 ---
 
@@ -697,18 +679,14 @@ Clique em:
 Authorize
 ```
 
-Informe:
-
-```text
-token_do_admin
-```
+Informe o token do serviço.
 
 ---
 
-### 5. Cadastrar veículo
+### 5. Sincronizar veículo
 
 ```http
-POST /api/vehicles
+PUT /api/internal/vehicles/{id}
 ```
 
 ---
@@ -731,7 +709,17 @@ POST /api/sales
 
 ---
 
-### 8. Listar veículos disponíveis
+### 8. Processar o pagamento
+
+Autorize novamente com o token do serviço e envie `Completed` ou `Canceled`:
+
+```http
+PUT /api/sales/payments/{paymentCode}
+```
+
+---
+
+### 9. Listar veículos disponíveis
 
 ```http
 GET /api/vehicles/available
@@ -741,7 +729,7 @@ O veículo comprado não deve aparecer mais.
 
 ---
 
-### 9. Listar veículos vendidos
+### 10. Listar veículos vendidos
 
 ```http
 GET /api/vehicles/sold
@@ -760,7 +748,7 @@ O vídeo de demonstração deve apresentar:
 2. Keycloak funcionando.
 3. Cadastro ou exibição do usuário comprador.
 4. Geração do token JWT.
-5. Cadastro de veículo pela API.
+5. Sincronização do veículo pelo software principal.
 6. Listagem de veículos disponíveis.
 7. Compra do veículo autenticado como comprador.
 8. Listagem de veículos vendidos.
@@ -784,16 +772,12 @@ Foi utilizado para manter autenticação e autorização separadas da solução 
 
 Foi escolhido por ter boa integração com Docker, Entity Framework Core e Keycloak.
 
-### Por que salvar apenas BuyerId?
+### Por que usar uma role de serviço?
 
-Para manter os dados pessoais do comprador fora da base transacional da API. A API salva apenas a referência do comprador autenticado.
-
-### Por que não implementar pagamento?
-
-O desafio não exige integração com gateway de pagamento. Por isso, a compra é efetivada no momento em que o comprador autenticado confirma a aquisição do veículo.
+Catálogo e resultado do pagamento são responsabilidades integradas ao software principal. A role `vehicle-sales-service` impede que usuários administrativos ou compradores chamem esses contratos internos.
 
 ---
 
 ## Autor
 
-Projeto desenvolvido para o Tech Challenge — Pós Tech FIAP — Fase 3 — SOAT.
+Projeto desenvolvido para o Tech Challenge — Pós Tech FIAP — Fase 4 — SOAT.

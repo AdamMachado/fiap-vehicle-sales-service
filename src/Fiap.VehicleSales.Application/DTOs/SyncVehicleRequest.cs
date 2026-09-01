@@ -1,6 +1,6 @@
-﻿namespace Fiap.VehicleSales.Application.DTOs;
+namespace Fiap.VehicleSales.Application.DTOs;
 
-public sealed class CreateVehicleRequest
+public sealed class SyncVehicleRequest
 {
     public string Brand { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;

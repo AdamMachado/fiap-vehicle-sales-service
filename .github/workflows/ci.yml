@@ -115,6 +115,22 @@ jobs:
           echo "Keycloak authentication did not become ready in time."
           exit 1
 
+      - name: Validate service-to-service authentication
+        shell: bash
+        run: |
+          token_response="$(
+            curl --fail --silent \
+              --request POST \
+              --url http://localhost:8080/realms/fiap-vehicle-sales/protocol/openid-connect/token \
+              --header "Content-Type: application/x-www-form-urlencoded" \
+              --data-urlencode "client_id=main-software" \
+              --data-urlencode "client_secret=main-software-local-secret" \
+              --data-urlencode "grant_type=client_credentials"
+          )"
+
+          echo "$token_response" | jq --exit-status \
+            '.access_token | length > 0' > /dev/null
+
       - name: Show running containers
         if: always()
         run: docker compose ps -a

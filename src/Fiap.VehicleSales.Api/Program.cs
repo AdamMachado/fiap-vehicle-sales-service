@@ -45,8 +45,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddInfrastructure(builder.Configuration);
 }
 
-builder.Services.AddScoped<CreateVehicleUseCase>();
-builder.Services.AddScoped<UpdateVehicleUseCase>();
+builder.Services.AddScoped<SyncVehicleUseCase>();
 builder.Services.AddScoped<GetVehicleByIdUseCase>();
 builder.Services.AddScoped<ListAvailableVehiclesUseCase>();
 builder.Services.AddScoped<ListSoldVehiclesUseCase>();
@@ -78,7 +77,11 @@ if (!builder.Environment.IsEnvironment("Testing"))
         });
 }
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("InternalService", policy =>
+        policy.RequireRole("vehicle-sales-service"));
+});
 
 var app = builder.Build();
 
