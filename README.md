@@ -604,8 +604,12 @@ Para executar com cobertura e validar o mínimo obrigatório de 80%:
 
 ```powershell
 dotnet test --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory TestResults
-./scripts/check-coverage.ps1 -ResultsPath TestResults -Minimum 80
+.\scripts\check-coverage.cmd -ResultsPath TestResults -Minimum 80
 ```
+
+O wrapper `.cmd` executa o verificador PowerShell com bypass somente nesse
+processo, sem modificar permanentemente a política de execução do Windows. No
+GitHub Actions, o workflow continua chamando diretamente o `.ps1` pelo `pwsh`.
 
 O cálculo consolida unitários e integração. Somente código gerado, migrations e composition roots são excluídos; controllers, autenticação, domínio, aplicação e repositórios permanecem na medição.
 
