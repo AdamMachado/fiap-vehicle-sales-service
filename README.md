@@ -649,8 +649,8 @@ publicada. Em pushes para `main`, depois de todas as validações, a imagem é
 publicada no GHCR com as tags do commit e `latest`:
 
 ```text
-ghcr.io/adammachado/fiap-vehicle-sales-api:<commit-sha>
-ghcr.io/adammachado/fiap-vehicle-sales-api:latest
+ghcr.io/adammachado/fiap-vehicle-sales-fase-4:<commit-sha>
+ghcr.io/adammachado/fiap-vehicle-sales-fase-4:latest
 ```
 
 O pipeline utiliza o `GITHUB_TOKEN` fornecido pelo GitHub Actions e a

@@ -18,7 +18,7 @@ permissions:
 env:
   DOTNET_VERSION: "10.0.x"
   CONFIGURATION: Release
-  IMAGE_NAME: ghcr.io/adammachado/fiap-vehicle-sales-api
+  IMAGE_NAME: ghcr.io/adammachado/fiap-vehicle-sales-fase-4
 
 jobs:
   build-and-test:
@@ -167,7 +167,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Docker image
-        run: docker build --file src/Fiap.VehicleSales.Api/Dockerfile --tag ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        run: |
+          docker build \
+            --file src/Fiap.VehicleSales.Api/Dockerfile \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --tag ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            .
 
       - name: Publish Docker image
         run: |
