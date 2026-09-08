@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/adammachado/fiap-vehicle-sales-api:latest
+          image: ghcr.io/adammachado/fiap-vehicle-sales-fase-4:latest
           imagePullPolicy: Always
           ports:
             - name: http

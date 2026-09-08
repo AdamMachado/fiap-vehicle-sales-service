@@ -6,9 +6,6 @@
 # dotenv files
 .env
 
-# Repositório independente do software principal da Fase 4
-/software-principal/
-
 # User-specific files
 *.rsuser
 *.suo
