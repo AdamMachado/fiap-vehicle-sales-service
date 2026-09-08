@@ -2,7 +2,7 @@
 
 Microsserviço transacional de venda de veículos desenvolvido para o Tech Challenge da Pós Tech FIAP — Fase 4 — curso SOAT.
 
-Este repositório contém somente as responsabilidades do serviço de vendas: sincronização interna do catálogo, listagens, reserva, compra e processamento interno do resultado do pagamento. Cadastro, edição e webhook público pertencem ao software principal, mantido em outro repositório e integrado por HTTP.
+Este repositório contém somente as responsabilidades do serviço de vendas: sincronização interna do catálogo, listagens, reserva, compra e processamento interno do resultado do pagamento. Cadastro, edição e webhook público pertencem ao [software principal](https://github.com/AdamMachado/fiap-vehicle-sales-software-principal-fase4), mantido em outro repositório e integrado por HTTP.
 
 A autenticação e autorização dos compradores foi implementada de forma separada da API principal, utilizando Keycloak, conforme a proposta do desafio de manter os dados dos clientes separados dos dados transacionais de vendas.
 
@@ -215,8 +215,8 @@ Antes de executar o projeto, é necessário ter instalado:
 ### Clonar o repositório
 
 ```bash
-git clone https://github.com/AdamMachado/fiap-vehicle-sales.git
-cd fiap-vehicle-sales
+git clone https://github.com/AdamMachado/fiap-vehicle-sales-Fase-4.git
+cd fiap-vehicle-sales-Fase-4
 ```
 
 ---
@@ -642,10 +642,10 @@ Validação da autenticação no Keycloak
 Publicação da imagem no GitHub Container Registry
 ```
 
-O workflow é executado em Pull Requests e pushes para a branch `master`.
+O workflow é executado em Pull Requests e pushes para a branch `main`.
 Também pode ser iniciado manualmente pelo GitHub Actions. Em Pull Requests e
 execuções manuais, todo o ambiente é construído e validado, mas a imagem não é
-publicada. Em pushes para `master`, depois de todas as validações, a imagem é
+publicada. Em pushes para `main`, depois de todas as validações, a imagem é
 publicada no GHCR com as tags do commit e `latest`:
 
 ```text
@@ -654,8 +654,10 @@ ghcr.io/adammachado/fiap-vehicle-sales-api:latest
 ```
 
 O pipeline utiliza o `GITHUB_TOKEN` fornecido pelo GitHub Actions e a
-permissão `packages: write`. O deploy da imagem em um ambiente público ainda
-não faz parte deste workflow.
+permissão `packages: write`. Ele publica a imagem pronta para implantação e os
+manifests em `k8s/` descrevem o deployment no Kubernetes. A aplicação em um
+cluster público depende das credenciais e do endereço do cluster de destino e,
+por isso, não é executada automaticamente neste repositório acadêmico.
 
 ---
 
