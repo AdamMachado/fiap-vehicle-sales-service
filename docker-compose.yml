@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: src/Fiap.VehicleSales.Api/Dockerfile
-    container_name: vehicle-sales-api
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
@@ -23,7 +22,6 @@ services:
 
   vehicle-sales-db:
     image: postgres:16
-    container_name: vehicle-sales-db
     environment:
       POSTGRES_DB: vehicle_sales_db
       POSTGRES_USER: postgres
@@ -42,7 +40,6 @@ services:
 
   keycloak-db:
     image: postgres:16
-    container_name: keycloak-db
     environment:
       POSTGRES_DB: keycloak_db
       POSTGRES_USER: keycloak
@@ -61,7 +58,6 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.0
-    container_name: keycloak
     command: start-dev --import-realm
     environment:
       KC_DB: postgres
