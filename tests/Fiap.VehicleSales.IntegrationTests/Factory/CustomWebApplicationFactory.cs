@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Fiap.VehicleSales.IntegrationTests.Factory;
 
@@ -16,17 +17,15 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private SqliteConnection? _connection;
 
-    static CustomWebApplicationFactory()
-    {
-        SQLitePCL.raw.SetProvider(
-            OperatingSystem.IsWindows()
-                ? new SQLitePCL.SQLite3Provider_winsqlite3()
-                : new SQLitePCL.SQLite3Provider_sqlite3());
-    }
-
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.AddConsole();
+        });
 
         builder.ConfigureServices(services =>
         {
