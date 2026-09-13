@@ -108,7 +108,7 @@ O projeto utiliza Clean Architecture com separação em camadas.
 
 A ideia principal é proteger as regras de negócio e manter a aplicação organizada, simples e fácil de manter.
 
-![Arquitetura da solução](docs/images/arquitetura.png)
+![Arquitetura da plataforma FIAP Vehicle Sales — Fase 4 com Docker](docs/images/arquitetura-fase4-v3.png)
 
 ### Domain
 
@@ -139,11 +139,11 @@ Contém:
 
 Exemplos de casos de uso:
 
-* Criar veículo;
-* Editar veículo;
+* Sincronizar veículo recebido do software principal;
 * Listar veículos disponíveis;
 * Listar veículos vendidos;
-* Comprar veículo.
+* Comprar veículo;
+* Processar confirmação ou cancelamento do pagamento.
 
 ### Infrastructure
 
@@ -190,6 +190,7 @@ Fiap.VehicleSales
 │   └── keycloak
 │       └── fiap-vehicle-sales-realm.json
 │
+├── Fiap.VehicleSales.Service.slnx
 ├── docker-compose.yml
 ├── README.md
 └── .github
@@ -702,47 +703,42 @@ kubectl apply -k k8s
 
 ## Como testar no Swagger
 
-### 1. Subir infraestrutura
+O fluxo correto começa no software principal. Os endpoints internos deste
+serviço são chamados automaticamente pela integração HTTP e não precisam ser
+executados manualmente durante a demonstração.
+
+### 1. Subir os dois repositórios
 
 ```bash
+# Neste repositório
+docker compose up -d --build
+
+# Em outro terminal, no repositório do software principal
 docker compose up -d --build
 ```
-
----
 
 ### 2. Acessar Swagger
 
 ```text
-http://localhost:5000/swagger
+Serviço de vendas: http://localhost:5000/swagger
+Software principal: http://localhost:5001/swagger
 ```
 
-### 3. Gerar token do software principal
-
-Use o fluxo `client_credentials` do client `main-software`.
-
----
-
-### 4. Autorizar no Swagger
-
-Clique em:
-
-```text
-Authorize
-```
-
-Informe o token do serviço.
-
----
-
-### 5. Sincronizar veículo
+### 3. Cadastrar o veículo no software principal
 
 ```http
-PUT /api/internal/vehicles/{id}
+POST /api/vehicles
 ```
 
----
+Autorize com o token de `admin@test.com`. O software principal chama
+automaticamente `PUT /api/internal/vehicles/{id}`.
 
-### 6. Gerar token de comprador
+### 4. Confirmar a sincronização
+
+No serviço de vendas, execute `GET /api/vehicles/available` e confirme que o
+veículo aparece com status `Available`.
+
+### 5. Gerar e aplicar o token do comprador
 
 Use o token do usuário:
 
@@ -750,43 +746,42 @@ Use o token do usuário:
 buyer@test.com
 ```
 
----
+Clique em `Authorize` no Swagger de vendas e informe somente o token JWT.
 
-### 7. Comprar veículo
+### 6. Comprar o veículo
 
 ```http
 POST /api/sales
 ```
 
----
+Guarde o `paymentCode` retornado com status `Pending`.
 
-### 8. Processar o pagamento
+### 7. Processar o pagamento pelo software principal
 
-Autorize novamente com o token do serviço e envie `Completed` ou `Canceled`:
+No Swagger principal, execute:
 
 ```http
-PUT /api/sales/payments/{paymentCode}
+POST /api/payments/webhook
 ```
 
----
+Preencha o header `X-Webhook-Secret` e envie o `paymentCode` com status
+`Completed` ou `Canceled`. O software principal chama automaticamente o
+endpoint interno de pagamento deste serviço.
 
-### 9. Listar veículos disponíveis
+### 8. Conferir o resultado
 
 ```http
 GET /api/vehicles/available
 ```
 
-O veículo comprado não deve aparecer mais.
-
----
-
-### 10. Listar veículos vendidos
-
 ```http
 GET /api/vehicles/sold
 ```
 
-O veículo comprado deve aparecer como vendido.
+Um pagamento concluído remove o veículo dos disponíveis e o inclui nos
+vendidos. Um pagamento cancelado devolve o veículo aos disponíveis. Repita o
+webhook para demonstrar a idempotência: a segunda resposta deve retornar
+`processed: false`.
 
 ---
 
@@ -801,10 +796,13 @@ O vídeo de demonstração deve apresentar:
 4. Geração do token JWT.
 5. Sincronização do veículo pelo software principal.
 6. Listagem de veículos disponíveis.
-7. Compra do veículo autenticado como comprador.
-8. Listagem de veículos vendidos.
-9. Execução dos testes.
-10. Pipeline de CI/CD no GitHub Actions.
+7. Compra autenticada e venda com status `Pending`.
+8. Webhook `Completed` e repetição retornando `processed: false`.
+9. Webhook `Canceled` devolvendo outro veículo aos disponíveis.
+10. Listagem de veículos vendidos.
+11. Bancos PostgreSQL segregados por serviço.
+12. Execução dos testes e evidência da cobertura mínima de 80%.
+13. Pipeline de CI/CD e imagens publicadas no GHCR.
 ```
 
 ---
